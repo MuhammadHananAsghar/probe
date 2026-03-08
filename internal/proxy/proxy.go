@@ -464,6 +464,9 @@ func (s *Server) emit(req *store.Request) {
 }
 
 // copyHeaders copies src headers into dst, skipping hop-by-hop headers.
+// Accept-Encoding is also stripped so that Go's http.Transport can add its own
+// and transparently decompress the response — otherwise gzip bodies reach the
+// parser as raw bytes that gjson silently fails to parse.
 func copyHeaders(dst, src http.Header) {
 	hopByHop := map[string]bool{
 		"Connection":          true,
@@ -475,6 +478,7 @@ func copyHeaders(dst, src http.Header) {
 		"Trailers":            true,
 		"Transfer-Encoding":   true,
 		"Upgrade":             true,
+		"Accept-Encoding":     true, // let Go's Transport handle gzip transparently
 	}
 	for k, vs := range src {
 		if hopByHop[k] || strings.EqualFold(k, "host") {

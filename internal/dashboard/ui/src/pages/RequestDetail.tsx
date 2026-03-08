@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState } from 'react'
-import type { Request } from '../hooks/useWebSocket'
+import type { Request, ToolDefinition } from '../hooks/useWebSocket'
 import { JsonBlock } from '../components/JsonViewer'
 import { formatDuration, formatCost, formatTokens, statusColor, providerColor } from '../utils'
 
@@ -21,7 +21,7 @@ export function RequestDetail({ requests }: { requests: Request[] }) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'messages', label: `Messages (${(req.messages?.length || 0) + (req.system_prompt ? 1 : 0)})` },
-    { key: 'tools', label: `Tools (${req.tool_calls?.length || 0})` },
+    { key: 'tools', label: `Tools (${(req.tools?.length || 0) + (req.tool_calls?.length || 0)})` },
     { key: 'stream', label: 'Stream' },
     { key: 'headers', label: 'Headers' },
     { key: 'raw', label: 'Raw' },
@@ -165,18 +165,43 @@ function ToolsTab({ req }: { req: Request }) {
   const resultMap = new Map((req.tool_results || []).map(tr => [tr.tool_call_id, tr]))
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* Tool Definitions — tools sent in the request */}
+      <Section title={`Tool Definitions (${req.tools?.length || 0})`}>
+        {(!req.tools || req.tools.length === 0) && (
+          <p className="text-gray-500 text-xs">(none — no tools were defined in this request)</p>
+        )}
+        {(req.tools || []).map((tool: ToolDefinition, i: number) => (
+          <div key={i} className="mb-3 bg-gray-900 rounded p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-blue-300 font-bold font-mono">{tool.name}</span>
+            </div>
+            {tool.description && (
+              <p className="text-xs text-gray-400 mb-2">{tool.description}</p>
+            )}
+            {tool.schema && (
+              <div>
+                <div className="text-xs text-gray-500 mb-1">input schema:</div>
+                <JsonBlock raw={tool.schema} />
+              </div>
+            )}
+          </div>
+        ))}
+      </Section>
+
+      {/* Tool Calls — tool invocations returned by the model */}
       <Section title={`Tool Calls (${req.tool_calls?.length || 0})`}>
         {(!req.tool_calls || req.tool_calls.length === 0) && (
-          <p className="text-gray-500 text-xs">(none)</p>
+          <p className="text-gray-500 text-xs">(none — the model did not invoke any tools)</p>
         )}
         {(req.tool_calls || []).map((tc, i) => {
           const result = resultMap.get(tc.id)
           return (
             <div key={i} className="mb-4 bg-gray-900 rounded p-3">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-gray-500">Step {i + 1}</span>
-                <span className="text-purple-300 font-bold">{tc.name}</span>
+                <span className="text-xs text-gray-500">Call {i + 1}</span>
+                <span className="text-purple-300 font-bold font-mono">{tc.name}</span>
+                {tc.id && <span className="text-xs text-gray-600 font-mono">{tc.id}</span>}
                 {tc.parse_error && <span className="text-red-400 text-xs bg-red-900/30 px-1 rounded">[malformed JSON]</span>}
               </div>
               <div className="mb-2">
@@ -191,7 +216,7 @@ function ToolsTab({ req }: { req: Request }) {
                   <pre className="text-xs text-gray-300 whitespace-pre-wrap break-words bg-gray-800 p-2 rounded font-mono">{result.content}</pre>
                 </div>
               ) : (
-                <div className="text-xs text-yellow-400">⏳ awaiting result...</div>
+                <div className="text-xs text-yellow-400">⏳ awaiting result in follow-up request</div>
               )}
             </div>
           )

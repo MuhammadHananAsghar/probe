@@ -94,10 +94,13 @@ function Header({
   return (
     <header className="border-b border-gray-800 px-4 py-2 flex items-center gap-4 sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm">
       <div className="flex items-center gap-2">
-        <span className="text-purple-400 font-bold text-base tracking-tight">probe</span>
+        <Link to="/" className="flex items-center gap-1.5 no-underline">
+          <span className="text-purple-400 font-bold text-base tracking-tight">probe</span>
+          <span className="text-gray-600 text-xs font-normal hidden sm:inline">LLM Debugger</span>
+        </Link>
         <span
-          className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-green-400' : 'bg-gray-600'}`}
-          title={connected ? 'Connected' : 'Disconnected'}
+          className={`w-2 h-2 rounded-full flex-shrink-0 ${connected ? 'bg-green-400' : 'bg-red-500'}`}
+          title={connected ? 'Live — WebSocket connected' : 'Disconnected'}
         />
       </div>
       <Nav />

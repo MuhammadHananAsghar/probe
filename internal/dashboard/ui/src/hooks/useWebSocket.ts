@@ -12,6 +12,12 @@ export interface ToolCall {
   parse_error?: boolean
 }
 
+export interface ToolDefinition {
+  name: string
+  description: string
+  schema: string
+}
+
 export interface ToolResult {
   tool_call_id: string
   content: string
@@ -54,6 +60,7 @@ export interface Request {
   stream_stats?: StreamStats
   system_prompt: string
   messages: Message[]
+  tools: ToolDefinition[]
   tool_calls: ToolCall[]
   tool_results: ToolResult[]
   anomalies: Anomaly[]

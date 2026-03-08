@@ -22,30 +22,32 @@
 **Probe** is an open-source LLM API debugger that sits between your application and any AI provider. Point your SDK at `http://localhost:9000` and get a full live view of every request, response, token count, cost, and latency — with zero code changes.
 
 ```bash
-OPENAI_BASE_URL=http://localhost:9000 python your_app.py
+probe listen
+# Proxy:     http://localhost:9000
+# Dashboard: http://localhost:9001
 ```
 
 ```
   █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀
   █  █ █▄▄▀ █  █ █▀▀▄ █▀▀
   █▀▀▀ ▀ ▀▀ ▀▀▀▀ ▀▀▀  ▀▀▀
-  probe v0.1.0  ·  listening on :9000  ·  dashboard http://localhost:9001
+  probe v0.1.1  ·  listening on :9000  ·  dashboard http://localhost:9001
 
-  #   Provider    Model                   Tokens     Cost      Latency  Status
-  ──────────────────────────────────────────────────────────────────────────────
-  1   openai      gpt-4o                  1,842      $0.0092   312ms    ✓ 200
-  2   anthropic   claude-3-5-sonnet       2,105      $0.0126   481ms    ✓ 200
-  3   openai      gpt-4o (stream)         938        $0.0047   128ms    ✓ 200
-  4   groq        llama-3.3-70b           4,210      $0.0021   89ms     ✓ 200
-  5   openai      gpt-4o                  —          —         —        ✗ 429
+  #   Provider    Model                          Tokens     Cost      Latency  Status
+  ──────────────────────────────────────────────────────────────────────────────────────
+  1   openai      gpt-4.1-mini                   1,842      $0.0028   312ms    ✓ 200
+  2   anthropic   claude-haiku-4-5-20251001       2,105      $0.0053   481ms    ✓ 200
+  3   openai      gpt-4.1-mini (stream)           938        $0.0014   128ms    ✓ 200
+  4   groq        llama-4-maverick               4,210      $0.0021   89ms     ✓ 200
+  5   openai      gpt-4.1-mini                   —          —         —        ✗ 429
 ```
 
 ## Features
 
-- **Zero code changes** — just redirect your `OPENAI_BASE_URL` (or equivalent) to probe
-- **All major providers** — OpenAI, Anthropic, Google Gemini, Ollama, Azure OpenAI, OpenRouter, Mistral, Cohere, Groq, Together, Fireworks, AWS Bedrock
+- **Zero code changes** — just redirect your `base_url` to probe, nothing else
+- **All major providers** — OpenAI, Anthropic, Google Gemini, Ollama, Azure OpenAI, OpenRouter, Mistral, Cohere, Groq, Together AI, Fireworks AI, AWS Bedrock
 - **Streaming debugger** — chunk timeline, TTFT (time-to-first-token), full SSE inspection
-- **Tool call inspector** — visualise every function call and its arguments/results
+- **Tool call inspector** — visualise every function definition, invocation, and result
 - **Token & cost tracking** — per-request and session totals with real pricing data
 - **Web dashboard** — live React SPA at `localhost:9001` with WebSocket updates
 - **Request replay** — re-send any captured request, optionally with a different model or provider
@@ -92,6 +94,8 @@ go build -o probe ./cmd/probe
 
 Pre-built binaries for macOS, Linux, and Windows are available on the [releases page](https://github.com/MuhammadHananAsghar/probe/releases).
 
+---
+
 ## Quick Start
 
 ### 1. Start probe
@@ -104,23 +108,244 @@ probe listen
 
 ### 2. Point your SDK at probe
 
-```bash
-# OpenAI (Python)
-export OPENAI_BASE_URL=http://localhost:9000
-
-# Anthropic (Python)
-export ANTHROPIC_BASE_URL=http://localhost:9000
-
-# Any OpenAI-compatible SDK
-export OPENAI_API_KEY=your-real-key
-export OPENAI_BASE_URL=http://localhost:9000
-
-python your_app.py
-```
+One line change in any SDK — no code changes anywhere else.
 
 ### 3. Watch traffic live
 
-Every request appears in the TUI instantly. Press `Enter` on any row to inspect the full request/response, `s` for the streaming chunk timeline, `t` for tool calls.
+Every request appears in the TUI instantly. Press `Enter` on any row to inspect the full request/response, `s` for the streaming chunk timeline, `t` for tool calls. Open `http://localhost:9001` for the live web dashboard.
+
+---
+
+## SDK Integration
+
+Probe works with every major LLM SDK. Change one line — the `base_url` — and all traffic flows through probe automatically.
+
+### OpenAI
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="your-key",
+    base_url="http://localhost:9000/v1",  # ← probe
+)
+
+response = client.chat.completions.create(
+    model="gpt-4.1-mini",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+```bash
+# Or via environment variable — zero code changes
+export OPENAI_BASE_URL=http://localhost:9000/v1
+python your_app.py
+```
+
+### Anthropic
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    api_key="your-key",
+    base_url="http://localhost:9000",  # ← probe (no /v1 suffix)
+)
+
+response = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    max_tokens=256,
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+```bash
+# Or via environment variable
+export ANTHROPIC_BASE_URL=http://localhost:9000
+python your_app.py
+```
+
+### Google Gemini
+
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="your-key",
+    http_options=types.HttpOptions(base_url="http://localhost:9000"),  # ← probe
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Hello!",
+)
+```
+
+### Groq
+
+```python
+from groq import Groq
+
+client = Groq(
+    api_key="your-key",
+    base_url="http://localhost:9000",  # ← probe
+)
+
+response = client.chat.completions.create(
+    model="meta-llama/llama-4-maverick-17b-128e-instruct",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Mistral
+
+```python
+from mistralai import Mistral
+
+client = Mistral(
+    api_key="your-key",
+    server_url="http://localhost:9000",  # ← probe
+)
+
+response = client.chat.complete(
+    model="mistral-small-2503",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Cohere
+
+```python
+import cohere
+
+client = cohere.ClientV2(
+    api_key="your-key",
+    base_url="http://localhost:9000",  # ← probe
+)
+
+response = client.chat(
+    model="command-a-03-2025",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Together AI
+
+```python
+from together import Together
+
+client = Together(
+    api_key="your-key",
+    base_url="http://localhost:9000/v1",  # ← probe
+)
+
+response = client.chat.completions.create(
+    model="meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Fireworks AI
+
+```python
+from fireworks.client import Fireworks
+
+client = Fireworks(
+    api_key="your-key",
+    base_url="http://localhost:9000/v1",  # ← probe
+)
+
+response = client.chat.completions.create(
+    model="accounts/fireworks/models/llama4-maverick-instruct-basic",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### OpenRouter
+
+```python
+from openai import OpenAI  # OpenRouter is OpenAI-compatible
+
+client = OpenAI(
+    api_key="your-openrouter-key",
+    base_url="http://localhost:9000/v1",  # ← probe
+    default_headers={"HTTP-Referer": "https://yourapp.com"},
+)
+
+response = client.chat.completions.create(
+    model="openai/gpt-4.1-mini",  # or any OpenRouter model
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Ollama (local)
+
+```python
+from openai import OpenAI  # Ollama is OpenAI-compatible
+
+client = OpenAI(
+    api_key="ollama",
+    base_url="http://localhost:9000/v1",  # ← probe (forwards to Ollama at :11434)
+)
+
+response = client.chat.completions.create(
+    model="llama3.2",  # must be pulled: ollama pull llama3.2
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+### Azure OpenAI
+
+```python
+import httpx
+from openai import AzureOpenAI
+
+client = AzureOpenAI(
+    api_key="your-key",
+    azure_endpoint="https://your-resource.openai.azure.com",
+    api_version="2024-10-21",
+    http_client=httpx.Client(
+        transport=httpx.HTTPTransport(proxy="http://localhost:9000"),  # ← probe
+    ),
+)
+```
+
+### AWS Bedrock
+
+```python
+import boto3
+from botocore.config import Config
+
+client = boto3.client(
+    "bedrock-runtime",
+    region_name="us-east-1",
+    config=Config(proxies={"https": "http://localhost:9000"}),  # ← probe
+)
+```
+
+### `base_url` Reference
+
+| Provider | `base_url` / config |
+|---|---|
+| OpenAI | `http://localhost:9000/v1` |
+| Anthropic | `http://localhost:9000` |
+| Google Gemini | `http_options=HttpOptions(base_url="http://localhost:9000")` |
+| Groq | `http://localhost:9000` |
+| Mistral | `server_url="http://localhost:9000"` |
+| Cohere | `http://localhost:9000` |
+| Together AI | `http://localhost:9000/v1` |
+| Fireworks AI | `http://localhost:9000/v1` |
+| OpenRouter | `http://localhost:9000/v1` |
+| Ollama | `http://localhost:9000/v1` |
+| Azure OpenAI | `httpx.HTTPTransport(proxy="http://localhost:9000")` |
+| AWS Bedrock | `Config(proxies={"https": "http://localhost:9000"})` |
+
+> **Why `/v1` for some but not others?**
+> OpenAI-compatible SDKs (OpenAI, Groq, Together, Fireworks, OpenRouter, Ollama) append paths like `/chat/completions` to the base URL themselves, so probe needs `/v1` in the base.
+> Anthropic, Mistral, and Cohere SDKs include `/v1` in their path already, so the base should be just `http://localhost:9000`.
+
+---
 
 ## CLI Reference
 
@@ -142,14 +367,14 @@ probe inspect 3 --lang node           # print a Node.js snippet
 
 # Replay a request
 probe replay 3                        # re-send as-is
-probe replay 3 --model gpt-4o-mini    # swap the model
+probe replay 3 --model gpt-4.1-mini  # swap the model
 probe replay 3 --provider anthropic   # translate to a different provider
 probe replay 3 --temperature 0.2      # override parameters
 probe replay 3 --export replay.md     # save comparison report
 
 # Compare two responses
 probe compare 3 5                     # diff requests #3 and #5
-probe compare 3 --models gpt-4o,gpt-4o-mini  # run same prompt on two models
+probe compare 3 --models gpt-4.1-mini,gpt-4.1  # run same prompt on two models
 
 # Export captured traffic
 probe export                          # JSON to stdout
@@ -162,7 +387,7 @@ probe export --filter provider=openai # filter by field
 probe history                         # list recent requests
 probe history --cost                  # sort by cost
 probe history --errors                # errors only
-probe history --model gpt-4o          # filter by model
+probe history --model gpt-4.1-mini    # filter by model
 probe history --limit 50              # last 50 requests
 probe history --cleanup               # delete requests older than retention_days
 
@@ -198,7 +423,7 @@ Open `http://localhost:9001` in your browser for the live dashboard:
 - Real-time request stream via WebSocket
 - Full request/response detail with syntax highlighting
 - Cost and token charts across the session
-- Tool call explorer
+- Tool call explorer — definitions, invocations, and results
 - Works alongside the TUI — both update simultaneously
 
 ## Supported Providers
@@ -233,8 +458,10 @@ storage:
   retention_days: 7       # cleanup threshold for probe history --cleanup
   ring_buffer_size: 1000  # in-memory request history size
 
-log:
-  level: info             # debug | info | warn | error
+alerts:
+  cost_threshold: 0.10    # alert when a single request costs more than $0.10
+  latency_threshold: 5s   # alert on requests slower than 5s
+  alert_on_error: true    # alert on any non-2xx response
 ```
 
 ## How It Works
@@ -293,6 +520,7 @@ probe/
 ├── pkg/
 │   ├── config/            # YAML config loader (~/.probe/config.yaml)
 │   └── logger/            # zerolog wrapper
+├── examples/              # Python SDK examples for every provider
 ├── pricing/               # Embedded LiteLLM pricing data
 ├── .github/workflows/     # CI + release (goreleaser)
 └── .goreleaser.yml        # Cross-platform release config

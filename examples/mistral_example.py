@@ -1,0 +1,86 @@
+"""
+Mistral SDK proxied through probe.
+
+Install:
+    pip install mistralai
+
+Start probe first:
+    probe listen
+
+Then run:
+    MISTRAL_API_KEY=your-key python examples/mistral_example.py
+"""
+
+import os
+from mistralai import Mistral
+
+client = Mistral(
+    api_key=os.environ.get("MISTRAL_API_KEY"),
+    server_url="http://localhost:9000",  # probe proxy
+)
+
+MODEL = "mistral-small-2503"  # Mistral Small 3.2 — latest small model
+
+
+def non_streaming():
+    print("=== Non-Streaming ===")
+    response = client.chat.complete(
+        model=MODEL,
+        messages=[{"role": "user", "content": "Say hello in 10 words."}],
+        max_tokens=64,
+    )
+    print(response.choices[0].message.content)
+    print(f"Tokens: {response.usage.total_tokens}")
+
+
+def streaming():
+    print("\n=== Streaming ===")
+    stream = client.chat.stream(
+        model=MODEL,
+        messages=[{"role": "user", "content": "Count from 1 to 5 slowly."}],
+        max_tokens=64,
+    )
+    for event in stream:
+        delta = event.data.choices[0].delta.content
+        if delta:
+            print(delta, end="", flush=True)
+    print()
+
+
+def with_tools():
+    print("\n=== Tool Calls ===")
+    from mistralai.models import Function, Tool
+
+    tools = [
+        Tool(
+            function=Function(
+                name="get_weather",
+                description="Get current weather for a city.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string", "description": "City name"},
+                    },
+                    "required": ["city"],
+                },
+            )
+        )
+    ]
+    response = client.chat.complete(
+        model=MODEL,
+        messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+        tools=tools,
+        tool_choice="auto",
+    )
+    msg = response.choices[0].message
+    if msg.tool_calls:
+        for tc in msg.tool_calls:
+            print(f"Tool: {tc.function.name}  Args: {tc.function.arguments}")
+    else:
+        print(msg.content)
+
+
+if __name__ == "__main__":
+    non_streaming()
+    streaming()
+    with_tools()
