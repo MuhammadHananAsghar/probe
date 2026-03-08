@@ -1,6 +1,6 @@
 # ── Binaries ──────────────────────────────────────────────────────────────────
-probe
-probe.exe
+/probe
+/probe.exe
 dist/
 *.exe
 *.out

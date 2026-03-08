@@ -14,8 +14,8 @@ import (
 // Config holds all probe configuration options.
 type Config struct {
 	Proxy struct {
-		Port           int           `yaml:"port"`            // default 8080
-		DashboardPort  int           `yaml:"dashboard_port"`  // default 4041
+		Port           int           `yaml:"port"`            // default 9000
+		DashboardPort  int           `yaml:"dashboard_port"`  // default 9001
 		StallThreshold time.Duration `yaml:"stall_threshold"` // default 500ms
 	} `yaml:"proxy"`
 	Alerts struct {
@@ -42,8 +42,8 @@ type CustomPricing struct {
 // Default returns a Config with all default values filled in.
 func Default() *Config {
 	cfg := &Config{}
-	cfg.Proxy.Port = 8080
-	cfg.Proxy.DashboardPort = 4041
+	cfg.Proxy.Port = 9000
+	cfg.Proxy.DashboardPort = 9001
 	cfg.Proxy.StallThreshold = 500 * time.Millisecond
 	cfg.Storage.RetentionDays = 7
 	cfg.Storage.RingBufferSize = 1000
@@ -77,10 +77,10 @@ func Load() (*Config, error) {
 
 	// Re-apply defaults for zero values so callers never see 0 for required fields.
 	if cfg.Proxy.Port == 0 {
-		cfg.Proxy.Port = 8080
+		cfg.Proxy.Port = 9000
 	}
 	if cfg.Proxy.DashboardPort == 0 {
-		cfg.Proxy.DashboardPort = 4041
+		cfg.Proxy.DashboardPort = 9001
 	}
 	if cfg.Proxy.StallThreshold == 0 {
 		cfg.Proxy.StallThreshold = 500 * time.Millisecond

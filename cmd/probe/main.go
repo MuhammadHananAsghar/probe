@@ -86,8 +86,8 @@ func buildListen() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVarP(&flags.port, "port", "p", 0, "Proxy port (default from config, fallback 8080)")
-	cmd.Flags().IntVar(&flags.dashboardPort, "dashboard-port", 0, "Dashboard port (default from config, fallback 4041)")
+	cmd.Flags().IntVarP(&flags.port, "port", "p", 0, "Proxy port (default from config, fallback 9000)")
+	cmd.Flags().IntVar(&flags.dashboardPort, "dashboard-port", 0, "Dashboard port (default from config, fallback 9001)")
 	cmd.Flags().BoolVar(&flags.noBrowser, "no-browser", false, "Don't auto-open browser")
 	cmd.Flags().BoolVar(&flags.noTLS, "no-tls", false, "Skip TLS interception (base URL mode only)")
 	cmd.Flags().StringVar(&flags.filter, "filter", "", "Only intercept matching provider or model=name")
