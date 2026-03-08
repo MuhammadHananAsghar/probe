@@ -13,6 +13,10 @@
   <a href="https://github.com/MuhammadHananAsghar/probe/actions"><img src="https://img.shields.io/github/actions/workflow/status/MuhammadHananAsghar/probe/ci.yml?style=flat-square&label=CI" alt="CI"></a>
 </p>
 
+<p align="center">
+  <img src="assets/demo.gif" alt="probe demo" width="800" />
+</p>
+
 ---
 
 **Probe** is an open-source LLM API debugger that sits between your application and any AI provider. Point your SDK at `http://localhost:8080` and get a full live view of every request, response, token count, cost, and latency — with zero code changes.
