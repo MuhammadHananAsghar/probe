@@ -1,0 +1,28 @@
+{
+  "updated_at": "2026-03-08",
+  "models": {
+    "gpt-4o": {"provider": "openai", "input_cost_per_1m": 2.50, "output_cost_per_1m": 10.00, "context_window": 128000},
+    "gpt-4o-mini": {"provider": "openai", "input_cost_per_1m": 0.15, "output_cost_per_1m": 0.60, "context_window": 128000},
+    "gpt-4-turbo": {"provider": "openai", "input_cost_per_1m": 10.00, "output_cost_per_1m": 30.00, "context_window": 128000},
+    "gpt-3.5-turbo": {"provider": "openai", "input_cost_per_1m": 0.50, "output_cost_per_1m": 1.50, "context_window": 16385},
+    "o1": {"provider": "openai", "input_cost_per_1m": 15.00, "output_cost_per_1m": 60.00, "context_window": 200000},
+    "o1-mini": {"provider": "openai", "input_cost_per_1m": 1.10, "output_cost_per_1m": 4.40, "context_window": 131072},
+    "o3-mini": {"provider": "openai", "input_cost_per_1m": 1.10, "output_cost_per_1m": 4.40, "context_window": 200000},
+    "claude-opus-4-5": {"provider": "anthropic", "input_cost_per_1m": 15.00, "output_cost_per_1m": 75.00, "context_window": 200000},
+    "claude-sonnet-4-5": {"provider": "anthropic", "input_cost_per_1m": 3.00, "output_cost_per_1m": 15.00, "context_window": 200000},
+    "claude-haiku-4-5": {"provider": "anthropic", "input_cost_per_1m": 0.80, "output_cost_per_1m": 4.00, "context_window": 200000},
+    "claude-opus-4": {"provider": "anthropic", "input_cost_per_1m": 15.00, "output_cost_per_1m": 75.00, "context_window": 200000},
+    "claude-sonnet-4": {"provider": "anthropic", "input_cost_per_1m": 3.00, "output_cost_per_1m": 15.00, "context_window": 200000},
+    "claude-3-5-sonnet": {"provider": "anthropic", "input_cost_per_1m": 3.00, "output_cost_per_1m": 15.00, "context_window": 200000},
+    "claude-3-5-haiku": {"provider": "anthropic", "input_cost_per_1m": 0.80, "output_cost_per_1m": 4.00, "context_window": 200000},
+    "claude-3-opus": {"provider": "anthropic", "input_cost_per_1m": 15.00, "output_cost_per_1m": 75.00, "context_window": 200000},
+    "gemini-2.0-flash": {"provider": "google", "input_cost_per_1m": 0.10, "output_cost_per_1m": 0.40, "context_window": 1000000},
+    "gemini-1.5-pro": {"provider": "google", "input_cost_per_1m": 1.25, "output_cost_per_1m": 5.00, "context_window": 2000000},
+    "gemini-1.5-flash": {"provider": "google", "input_cost_per_1m": 0.075, "output_cost_per_1m": 0.30, "context_window": 1000000},
+    "mistral-large": {"provider": "mistral", "input_cost_per_1m": 2.00, "output_cost_per_1m": 6.00, "context_window": 131072},
+    "mistral-small": {"provider": "mistral", "input_cost_per_1m": 0.20, "output_cost_per_1m": 0.60, "context_window": 131072},
+    "llama-3.3-70b-versatile": {"provider": "groq", "input_cost_per_1m": 0.59, "output_cost_per_1m": 0.79, "context_window": 131072},
+    "llama-3.1-8b-instant": {"provider": "groq", "input_cost_per_1m": 0.05, "output_cost_per_1m": 0.08, "context_window": 131072},
+    "mixtral-8x7b-32768": {"provider": "groq", "input_cost_per_1m": 0.24, "output_cost_per_1m": 0.24, "context_window": 32768}
+  }
+}
