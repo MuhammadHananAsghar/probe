@@ -348,12 +348,27 @@ func (s *Server) interceptRequest(w http.ResponseWriter, r *http.Request, p prov
 		req.Status = store.StatusStreaming
 		s.store.Update(req)
 
-		tee := intercept.NewTeeReadCloser(resp.Body)
-		if _, err := io.Copy(w, tee); err != nil {
-			s.log.Warn().Err(err).Msg("streaming copy interrupted")
-			req.StreamStats = &store.StreamStats{Interrupted: true}
+		// Flush the response headers so the client starts receiving immediately.
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
 		}
-		respBody = tee.Bytes()
+
+		// Determine if this provider supports stream parsing.
+		var sp provider.StreamParser
+		if spi, ok := p.(provider.StreamParser); ok {
+			sp = spi
+		}
+
+		si := intercept.NewStreamInterceptor(resp.Body, w, sp)
+		if err := si.Intercept(r.Context(), req, s.cfg.StallThreshold); err != nil {
+			s.log.Warn().Err(err).Msg("stream interceptor error")
+		}
+		// Collect response body from chunks for ParseResponse fallback.
+		var sb strings.Builder
+		for _, c := range req.Chunks {
+			sb.WriteString(c.Content)
+		}
+		respBody = []byte(sb.String())
 	} else {
 		var buf bytes.Buffer
 		mw := io.MultiWriter(w, &buf)

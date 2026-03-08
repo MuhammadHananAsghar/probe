@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/MuhammadHananAsghar/probe/internal/store"
 )
@@ -179,18 +180,36 @@ func buildLines(req *store.Request, width int) []string {
 		add(errorStyle.Render(" " + truncate(req.ErrorMessage, maxContentLen)))
 	}
 
-	// Streaming stats
-	if req.StreamStats != nil {
-		ss := req.StreamStats
-		blank()
-		add(sectionHeader("Stream Stats", inner))
-		add(fmt.Sprintf(" Chunks: %d   Throughput: %.1f tok/s   Stalls: %d",
-			ss.ChunkCount, ss.ThroughputTPS, ss.StallCount))
+	// Stream section — show summary if this is a streaming request, otherwise a note.
+	blank()
+	add(sectionHeader("Stream", inner))
+	if req.Stream && (req.StreamStats != nil || req.Status == store.StatusStreaming) {
+		if req.StreamStats != nil {
+			ss := req.StreamStats
+			ttft := "—"
+			if req.TTFT > 0 {
+				ttft = FormatDuration(req.TTFT)
+			}
+			tps := "—"
+			if ss.ThroughputTPS > 0 {
+				tps = fmt.Sprintf("%.1f tok/s", ss.ThroughputTPS)
+			}
+			add(fmt.Sprintf(" TTFT: %s  Chunks: %d  Duration: %s  Throughput: %s",
+				ttft,
+				ss.ChunkCount,
+				FormatDuration(ss.StreamDuration),
+				tps,
+			))
+		} else {
+			add(warningStyle.Render(" ⏳ Streaming in progress..."))
+		}
+	} else {
+		add(dimStyle.Render(" (not a streaming request)"))
 	}
 
 	blank()
 	// Help line
-	add(dimStyle.Render("  q/Esc: back  ↑/↓ or j/k: scroll  r: replay (Phase 5)  e: export (Phase 6)"))
+	add(dimStyle.Render("  q/Esc: back  ↑/↓ or j/k: scroll  s: stream view  r: replay (Phase 5)  e: export (Phase 6)"))
 	blank()
 
 	return lines
@@ -216,6 +235,15 @@ func (m *detailModel) scrollDown() {
 	}
 	if m.scrollY < maxScroll {
 		m.scrollY++
+	}
+}
+
+// openStreamCmd returns a tea.Cmd that emits an openStreamMsg for the current request.
+// It is called when the user presses 's' in the detail view.
+func (m detailModel) openStreamCmd() tea.Cmd {
+	req := m.req
+	return func() tea.Msg {
+		return openStreamMsg{Req: req}
 	}
 }
 

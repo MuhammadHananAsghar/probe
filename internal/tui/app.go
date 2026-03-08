@@ -16,6 +16,8 @@ const (
 	ViewList ViewMode = iota
 	// ViewDetail shows full details for a selected request.
 	ViewDetail
+	// ViewStream shows the chunk-by-chunk streaming timeline for a request.
+	ViewStream
 )
 
 // RequestMsg is a bubbletea message carrying a new or updated request.
@@ -24,14 +26,18 @@ type RequestMsg struct{ Req *store.Request }
 // TickMsg is sent periodically for spinner animation updates.
 type TickMsg struct{ T time.Time }
 
+// openStreamMsg is sent when the user presses 's' in the detail view.
+type openStreamMsg struct{ Req *store.Request }
+
 // tickInterval controls how frequently the spinner advances.
 const tickInterval = 100 * time.Millisecond
 
-// App is the main bubbletea model that composes the list and detail views.
+// App is the main bubbletea model that composes the list, detail, and stream views.
 type App struct {
 	mode        ViewMode
 	list        listModel
 	detail      detailModel
+	stream      streamModel
 	stats       store.SessionStats
 	tracker     *analyze.Tracker
 	width       int
@@ -93,6 +99,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.detail.height = a.height - statsBarHeight
 		a.detail.rebuild()
 
+		a.stream.width = a.width
+		a.stream.height = a.height - statsBarHeight
+
 	// ── New / updated request from proxy ─────────────────────────────────────
 	case RequestMsg:
 		a.list.upsert(m.Req)
@@ -104,7 +113,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.detail.req = m.Req
 			a.detail.rebuild()
 		}
+		// Refresh stream view if the incoming update matches the displayed request.
+		if a.mode == ViewStream && a.stream.req != nil && a.stream.req.ID == m.Req.ID {
+			a.stream.update(m.Req)
+		}
 		return a, ListenForRequests(a.reqCh)
+
+	// ── Open stream view (user pressed 's' in detail view) ───────────────────
+	case openStreamMsg:
+		a.stream = newStreamModel(m.Req)
+		a.stream.width = a.width
+		a.stream.height = a.height - 1
+		a.mode = ViewStream
 
 	// ── Periodic tick (spinner) ───────────────────────────────────────────────
 	case TickMsg:
@@ -119,6 +139,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a.updateList(m)
 		case ViewDetail:
 			return a.updateDetail(m)
+		case ViewStream:
+			return a.updateStream(m)
 		}
 	}
 
@@ -160,6 +182,26 @@ func (a App) updateDetail(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		a.detail.scrollDown()
+
+	case "s":
+		if a.detail.req != nil {
+			return a, a.detail.openStreamCmd()
+		}
+	}
+	return a, nil
+}
+
+// updateStream handles keyboard events in the stream view.
+func (a App) updateStream(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "q", "esc":
+		a.mode = ViewDetail
+
+	case "up", "k":
+		a.stream.scrollUp()
+
+	case "down", "j":
+		a.stream.scrollDown()
 	}
 	return a, nil
 }
@@ -172,6 +214,8 @@ func (a App) View() string {
 	switch a.mode {
 	case ViewDetail:
 		body = a.detail.View()
+	case ViewStream:
+		body = a.stream.View()
 	default:
 		header := listHeader()
 		body = header + "\n" + a.list.View()

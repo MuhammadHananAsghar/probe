@@ -139,6 +139,42 @@ func (a *Anthropic) ParseResponse(body []byte, req *store.Request) error {
 	return nil
 }
 
+// ParseEvent implements StreamParser for Anthropic's SSE format.
+// Anthropic sends named events:
+//
+//	event: message_start      → usage.input_tokens
+//	event: content_block_delta → delta.text
+//	event: message_delta      → usage.output_tokens, stop_reason
+func (a *Anthropic) ParseEvent(eventType, data string, req *store.Request) string {
+	if len(data) == 0 {
+		return ""
+	}
+	b := []byte(data)
+
+	switch eventType {
+	case "message_start":
+		it := gjson.GetBytes(b, "message.usage.input_tokens")
+		if it.Exists() {
+			req.InputTokens = int(it.Int())
+		}
+	case "content_block_delta":
+		deltaType := gjson.GetBytes(b, "delta.type").String()
+		if deltaType == "text_delta" {
+			return gjson.GetBytes(b, "delta.text").String()
+		}
+		// tool_use input_json_delta — Phase 3
+	case "message_delta":
+		ot := gjson.GetBytes(b, "usage.output_tokens")
+		if ot.Exists() {
+			req.OutputTokens = int(ot.Int())
+		}
+		if sr := gjson.GetBytes(b, "delta.stop_reason"); sr.Exists() {
+			req.FinishReason = mapAnthropicStopReason(sr.String())
+		}
+	}
+	return ""
+}
+
 // mapAnthropicStopReason converts Anthropic stop_reason strings to the
 // canonical store.FinishReason type.
 func mapAnthropicStopReason(s string) store.FinishReason {

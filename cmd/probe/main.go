@@ -40,6 +40,7 @@ func buildRoot() *cobra.Command {
 
 	root.AddCommand(buildListen())
 	root.AddCommand(buildVersion())
+	root.AddCommand(buildInspect())
 
 	return root
 }
@@ -196,4 +197,40 @@ func buildVersion() *cobra.Command {
 			fmt.Printf("probe %s\n", version)
 		},
 	}
+}
+
+// buildInspect constructs the inspect subcommand, which provides CLI-level
+// access to a captured request by its sequence number.
+func buildInspect() *cobra.Command {
+	var (
+		showStream bool
+		replay     bool
+		speed      float64
+	)
+
+	cmd := &cobra.Command{
+		Use:   "inspect <seq>",
+		Short: "Inspect a captured request by sequence number",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInspect(args[0], showStream, replay, speed)
+		},
+	}
+
+	cmd.Flags().BoolVar(&showStream, "stream", false, "Show stream chunk timeline")
+	cmd.Flags().BoolVar(&replay, "replay", false, "Replay stream at original timing")
+	cmd.Flags().Float64Var(&speed, "speed", 1.0, "Replay speed multiplier (e.g. 2.0 for 2x faster)")
+	return cmd
+}
+
+// runInspect handles the inspect subcommand. Full persistence support and
+// standalone inspection (outside a live session) will arrive in Phase 6.
+func runInspect(seqStr string, showStream, replay bool, speed float64) error {
+	// NOTE: inspect requires a running probe session to have a store.
+	// For Phase 2, print a note that inspect works within a live session.
+	// The full implementation (reading from SQLite) comes in Phase 6.
+	fmt.Println("inspect: connect to a running probe session to inspect requests.")
+	fmt.Println("Use 'probe listen' and press Enter on a request to view details.")
+	fmt.Printf("(Full --stream --replay support coming in Phase 6 with persistence)\n")
+	return nil
 }

@@ -127,6 +127,50 @@ func (o *OpenAI) ParseResponse(body []byte, req *store.Request) error {
 	return nil
 }
 
+// ParseEvent implements StreamParser for OpenAI's SSE format.
+// OpenAI events have no "event:" line — eventType is always "".
+// data is a JSON string like:
+//
+//	{"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}
+//
+// or the final chunk with usage:
+//
+//	{"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}
+func (o *OpenAI) ParseEvent(eventType, data string, req *store.Request) string {
+	if data == "[DONE]" || len(data) == 0 {
+		return ""
+	}
+	b := []byte(data)
+
+	// Finish reason (may be null mid-stream).
+	fr := gjson.GetBytes(b, "choices.0.finish_reason")
+	if fr.Exists() && fr.Type != gjson.Null {
+		req.FinishReason = mapOpenAIFinishReason(fr.String())
+	}
+
+	// Tool call delta (Phase 3 will handle fully; just accumulate name here).
+	tcName := gjson.GetBytes(b, "choices.0.delta.tool_calls.0.function.name").String()
+	if tcName != "" {
+		if len(req.ToolCalls) == 0 {
+			req.ToolCalls = append(req.ToolCalls, store.ToolCall{
+				ID:   gjson.GetBytes(b, "choices.0.delta.tool_calls.0.id").String(),
+				Name: tcName,
+			})
+		}
+	}
+
+	// Usage in final chunk (some models include it).
+	if pt := gjson.GetBytes(b, "usage.prompt_tokens"); pt.Exists() {
+		req.InputTokens = int(pt.Int())
+	}
+	if ct := gjson.GetBytes(b, "usage.completion_tokens"); ct.Exists() {
+		req.OutputTokens = int(ct.Int())
+	}
+
+	// Content delta.
+	return gjson.GetBytes(b, "choices.0.delta.content").String()
+}
+
 // mapOpenAIFinishReason converts OpenAI finish_reason strings to the canonical
 // store.FinishReason type.
 func mapOpenAIFinishReason(s string) store.FinishReason {

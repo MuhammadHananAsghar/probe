@@ -2,7 +2,7 @@
 
 ## Phase 2 — Streaming Debugger
 
-**Status:** Not Started
+**Status:** Done
 
 ## Description
 
