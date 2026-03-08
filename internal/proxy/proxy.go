@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -293,13 +294,20 @@ func (s *Server) interceptRequest(w http.ResponseWriter, r *http.Request, p prov
 	}
 	s.store.Update(req)
 
+	// For OpenAI streaming requests, inject stream_options.include_usage=true
+	// so the final chunk includes token counts (not sent by default).
+	forwardBody := bodyBytes
+	if req.Stream && (p.Name() == store.ProviderOpenAI || p.Name() == store.ProviderCompatible) {
+		forwardBody = injectStreamUsage(bodyBytes)
+	}
+
 	// Build the forwarded request.
 	targetURL := "https://" + forwardHost + r.URL.Path
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(bodyBytes))
+	outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(forwardBody))
 	if err != nil {
 		req.Status = store.StatusError
 		req.ErrorMessage = fmt.Sprintf("building upstream request: %v", err)
@@ -381,9 +389,13 @@ func (s *Server) interceptRequest(w http.ResponseWriter, r *http.Request, p prov
 	req.ResponseBody = respBody
 	req.Latency = time.Since(req.StartedAt)
 
-	// Parse the response for tokens, finish reason, etc.
-	if parseErr := p.ParseResponse(respBody, req); parseErr != nil {
-		s.log.Warn().Err(parseErr).Msg("parsing response")
+	// For streaming requests, tokens/content/finish_reason are already captured
+	// by ParseEvent during interception. Only call ParseResponse for error bodies
+	// (which are JSON regardless of streaming) or non-streaming responses.
+	if !req.Stream || resp.StatusCode >= 400 {
+		if parseErr := p.ParseResponse(respBody, req); parseErr != nil {
+			s.log.Warn().Err(parseErr).Msg("parsing response")
+		}
 	}
 
 	req.Status = store.StatusDone
@@ -455,6 +467,27 @@ func copyHeaders(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
+}
+
+// injectStreamUsage adds stream_options.include_usage=true to an OpenAI
+// streaming request body so the final SSE chunk carries token usage counts.
+// Returns the original body unchanged if injection fails.
+func injectStreamUsage(body []byte) []byte {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return body
+	}
+	opts, _ := m["stream_options"].(map[string]any)
+	if opts == nil {
+		opts = make(map[string]any)
+	}
+	opts["include_usage"] = true
+	m["stream_options"] = opts
+	out, err := json.Marshal(m)
+	if err != nil {
+		return body
+	}
+	return out
 }
 
 // flattenHeaders converts a http.Header into a simple map[string]string,
