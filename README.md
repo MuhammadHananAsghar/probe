@@ -55,6 +55,18 @@ OPENAI_BASE_URL=http://localhost:8080 python your_app.py
 
 ## Install
 
+### Quick install (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MuhammadHananAsghar/probe/main/install.sh | sh
+```
+
+### Homebrew (macOS)
+
+```bash
+brew install MuhammadHananAsghar/tap/probe
+```
+
 ### Go install
 
 ```bash
