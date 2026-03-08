@@ -24,8 +24,9 @@ type Config struct {
 		AlertOnError     bool          `yaml:"alert_on_error"`
 	} `yaml:"alerts"`
 	Storage struct {
-		RetentionDays  int `yaml:"retention_days"`   // default 7
-		RingBufferSize int `yaml:"ring_buffer_size"` // default 1000
+		Persist        bool `yaml:"persist"`           // default false
+		RetentionDays  int  `yaml:"retention_days"`    // default 7
+		RingBufferSize int  `yaml:"ring_buffer_size"`  // default 1000
 	} `yaml:"storage"`
 	Pricing struct {
 		Custom map[string]CustomPricing `yaml:"custom"` // model -> pricing overrides

@@ -20,15 +20,19 @@ type entry struct {
 var registry = []entry{
 	{hostSuffix: "api.openai.com", factory: func() Provider { return &OpenAI{} }},
 	{hostSuffix: "api.anthropic.com", factory: func() Provider { return &Anthropic{} }},
+	// Google Gemini: dedicated parser handles "contents" format.
 	{hostSuffix: "generativelanguage.googleapis.com", factory: func() Provider {
-		return NewGeneric(store.ProviderGoogle)
+		return &Google{}
 	}},
+	// Mistral uses OpenAI-compatible format.
 	{hostSuffix: "api.mistral.ai", factory: func() Provider {
 		return NewGeneric(store.ProviderMistral)
 	}},
+	// Cohere uses OpenAI-compatible v2 format.
 	{hostSuffix: "api.cohere.com", factory: func() Provider {
 		return NewGeneric(store.ProviderCohere)
 	}},
+	// Groq/Together/Fireworks: OpenAI-compatible with streaming.
 	{hostSuffix: "api.groq.com", factory: func() Provider {
 		return NewGeneric(store.ProviderGroq)
 	}},
@@ -38,21 +42,14 @@ var registry = []entry{
 	{hostSuffix: "api.fireworks.ai", factory: func() Provider {
 		return NewGeneric(store.ProviderFireworks)
 	}},
-	// Ollama local instances.
-	{hostSuffix: "localhost:11434", factory: func() Provider {
-		return NewGeneric(store.ProviderOllama)
-	}},
-	{hostSuffix: "127.0.0.1:11434", factory: func() Provider {
-		return NewGeneric(store.ProviderOllama)
-	}},
-	{hostSuffix: "openrouter.ai", factory: func() Provider {
-		return NewGeneric(store.ProviderOpenRouter)
-	}},
-	// Azure OpenAI: *.openai.azure.com
-	{hostSuffix: ".openai.azure.com", factory: func() Provider {
-		return NewGeneric(store.ProviderAzureOpenAI)
-	}},
-	// AWS Bedrock: bedrock-runtime.*.amazonaws.com
+	// Ollama: dedicated parser for local model format.
+	{hostSuffix: "localhost:11434", factory: func() Provider { return &Ollama{} }},
+	{hostSuffix: "127.0.0.1:11434", factory: func() Provider { return &Ollama{} }},
+	// OpenRouter: OpenAI-compatible with provider/model naming.
+	{hostSuffix: "openrouter.ai", factory: func() Provider { return &OpenRouter{} }},
+	// Azure OpenAI: dedicated parser extracts deployment name from URL.
+	{hostSuffix: ".openai.azure.com", factory: func() Provider { return &Azure{} }},
+	// AWS Bedrock: Generic (complex format, future dedicated parser).
 	{hostSuffix: ".amazonaws.com", pathPrefix: "", factory: func() Provider {
 		return NewGeneric(store.ProviderBedrock)
 	}},

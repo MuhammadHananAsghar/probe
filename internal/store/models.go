@@ -56,6 +56,43 @@ type ToolCall struct {
 	ParseError    bool   `json:"parse_error,omitempty"`
 }
 
+// ToolResult is a tool execution result sent back to the model in a follow-up request.
+type ToolResult struct {
+	ToolCallID string `json:"tool_call_id"`
+	Content    string `json:"content"`
+	IsError    bool   `json:"is_error,omitempty"`
+}
+
+// AnomalyKind classifies a detected tool call issue.
+type AnomalyKind string
+
+const (
+	AnomalyOrphanedCall  AnomalyKind = "orphaned_tool_call"
+	AnomalyMalformedArgs AnomalyKind = "malformed_args"
+	AnomalyToolLoop      AnomalyKind = "tool_loop"
+	AnomalySlowTool      AnomalyKind = "slow_tool"
+	AnomalyManyTools     AnomalyKind = "many_tools"
+)
+
+// Anomaly is an automatically detected issue surfaced as a warning.
+type Anomaly struct {
+	Kind    AnomalyKind `json:"kind"`
+	Message string      `json:"message"`
+}
+
+// ToolChainStep is one step in a multi-turn tool call chain.
+type ToolChainStep struct {
+	StepNum     int           `json:"step_num"`
+	ToolCallID  string        `json:"tool_call_id"`
+	ToolName    string        `json:"tool_name"`
+	Arguments   string        `json:"arguments"`  // JSON
+	Result      string        `json:"result,omitempty"`
+	IsError     bool          `json:"is_error,omitempty"`
+	CallReqID   string        `json:"call_req_id"`
+	ResultReqID string        `json:"result_req_id,omitempty"`
+	Latency     time.Duration `json:"latency,omitempty"`
+}
+
 // StreamChunk is a single SSE chunk with timing.
 type StreamChunk struct {
 	Index     int           `json:"index"`
@@ -110,6 +147,8 @@ type Request struct {
 	Messages        []Message        `json:"messages,omitempty"`
 	SystemPrompt    string           `json:"system_prompt,omitempty"`
 	Tools           []ToolDefinition `json:"tools,omitempty"`
+	ManyTools       bool             `json:"many_tools,omitempty"` // true when > 20 tools
+	ToolResults     []ToolResult     `json:"tool_results,omitempty"` // tool results in this request
 	Temperature     *float64         `json:"temperature,omitempty"`
 	MaxTokens       *int             `json:"max_tokens,omitempty"`
 	Stream          bool             `json:"stream"`
@@ -118,6 +157,13 @@ type Request struct {
 	ResponseContent string       `json:"response_content,omitempty"`
 	ToolCalls       []ToolCall   `json:"tool_calls,omitempty"`
 	FinishReason    FinishReason `json:"finish_reason,omitempty"`
+
+	// Analysis
+	Anomalies      []Anomaly `json:"anomalies,omitempty"`
+
+	// StreamToolIdx maps Anthropic SSE content_block index → ToolCalls slice index.
+	// Populated during streaming only; not serialized.
+	StreamToolIdx map[int]int `json:"-"`
 
 	// Tokens
 	InputTokens  int `json:"input_tokens"`

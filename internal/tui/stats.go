@@ -14,7 +14,7 @@ func renderStatsBar(stats store.SessionStats, proxyAddr, dashAddr string, width 
 	// Left side: session stats
 	reqPart := fmt.Sprintf("Session: %d requests", stats.RequestCount)
 
-	costPart := costStyle.Render(fmt.Sprintf("$%.4f total", stats.TotalCost))
+	costPart := costStyle.Render(fmt.Sprintf("$%.8f total", stats.TotalCost))
 
 	var ttftPart string
 	if avg := stats.AvgTTFT(); avg > 0 {

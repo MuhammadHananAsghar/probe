@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/MuhammadHananAsghar/probe/internal/analyze"
+	"github.com/MuhammadHananAsghar/probe/internal/cost"
 	"github.com/MuhammadHananAsghar/probe/internal/intercept"
 	"github.com/MuhammadHananAsghar/probe/internal/provider"
 	"github.com/MuhammadHananAsghar/probe/internal/store"
@@ -54,6 +55,8 @@ type Server struct {
 	certCache *CertCache
 	store     store.Store
 	tracker   *analyze.Tracker
+	pricingDB *cost.DB
+	session   *analyze.SessionManager
 	eventCh   chan *store.Request
 	mu        sync.Mutex
 	log       *zerolog.Logger
@@ -61,7 +64,7 @@ type Server struct {
 
 // New creates a new proxy Server. It loads or creates the local CA and
 // initialises the certificate cache.
-func New(cfg Config, s store.Store, tracker *analyze.Tracker) (*Server, error) {
+func New(cfg Config, s store.Store, tracker *analyze.Tracker, pricingDB *cost.DB) (*Server, error) {
 	ca, err := LoadOrCreateCA()
 	if err != nil {
 		return nil, fmt.Errorf("proxy: loading CA: %w", err)
@@ -74,6 +77,8 @@ func New(cfg Config, s store.Store, tracker *analyze.Tracker) (*Server, error) {
 		certCache: NewCertCache(ca),
 		store:     s,
 		tracker:   tracker,
+		pricingDB: pricingDB,
+		session:   analyze.NewSessionManager(),
 		eventCh:   make(chan *store.Request, 256),
 		log:       &l,
 	}
@@ -397,6 +402,18 @@ func (s *Server) interceptRequest(w http.ResponseWriter, r *http.Request, p prov
 			s.log.Warn().Err(parseErr).Msg("parsing response")
 		}
 	}
+
+	// Calculate cost now that tokens are finalised.
+	if s.pricingDB != nil {
+		cost.Calculate(s.pricingDB, req)
+	}
+
+	// Parse rate limit headers before marking done.
+	analyze.ParseRateLimitHeaders(req)
+
+	// Detect anomalies and assign conversation ID.
+	req.Anomalies = analyze.DetectAnomalies(req)
+	s.session.AssignConversation(req, s.store.All())
 
 	req.Status = store.StatusDone
 	if resp.StatusCode >= 400 {

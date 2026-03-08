@@ -147,16 +147,61 @@ func buildLines(req *store.Request, width int) []string {
 		add(fmt.Sprintf(" %s", content))
 	}
 
+	// Anomaly warnings
+	if len(req.Anomalies) > 0 {
+		blank()
+		add(sectionHeader("⚠ Warnings", inner))
+		for _, a := range req.Anomalies {
+			style := warningStyle
+			if a.Kind == store.AnomalyMalformedArgs || a.Kind == store.AnomalyToolLoop {
+				style = errorStyle
+			}
+			add(fmt.Sprintf(" %s  %s", style.Render("⚠"), a.Message))
+		}
+	}
+
 	// Tool Calls
 	blank()
-	add(sectionHeader("Tool Calls", inner))
+	toolHeader := fmt.Sprintf("Tool Calls (%d)", len(req.ToolCalls))
+	if len(req.ToolCalls) > 0 {
+		toolHeader += dimStyle.Render("  — press t for full inspector")
+	}
+	add(sectionHeader(toolHeader, inner))
 	if len(req.ToolCalls) == 0 {
 		add(dimStyle.Render(" (none)"))
 	} else {
 		for _, tc := range req.ToolCalls {
+			errBadge := ""
+			if tc.ParseError {
+				errBadge = " " + errorStyle.Render("[malformed JSON]")
+			}
 			args := truncate(tc.ArgumentsJSON, maxContentLen)
-			add(fmt.Sprintf(" %s(%s)", modelStyle.Render(tc.Name), dimStyle.Render(args)))
+			add(fmt.Sprintf(" %s(%s)%s", modelStyle.Render(tc.Name), dimStyle.Render(args), errBadge))
 		}
+	}
+
+	// Tool Results (received in this request)
+	if len(req.ToolResults) > 0 {
+		blank()
+		add(sectionHeader(fmt.Sprintf("Tool Results Received (%d)", len(req.ToolResults)), inner))
+		for _, tr := range req.ToolResults {
+			errNote := ""
+			if tr.IsError {
+				errNote = " " + errorStyle.Render("(error)")
+			}
+			content := truncate(tr.Content, maxContentLen)
+			add(fmt.Sprintf(" id:%s%s  %s",
+				dimStyle.Render(truncate(tr.ToolCallID, 16)),
+				errNote,
+				content,
+			))
+		}
+	}
+
+	// ManyTools warning
+	if req.ManyTools {
+		blank()
+		add(warningStyle.Render(fmt.Sprintf(" ⚠ %d tools defined — more than 20 tools may degrade model behavior", len(req.Tools))))
 	}
 
 	// Rate Limits
@@ -209,7 +254,7 @@ func buildLines(req *store.Request, width int) []string {
 
 	blank()
 	// Help line
-	add(dimStyle.Render("  q/Esc: back  ↑/↓ or j/k: scroll  s: stream view  r: replay (Phase 5)  e: export (Phase 6)"))
+	add(dimStyle.Render("  q/Esc: back  ↑/↓ or j/k: scroll  s: stream  t: tools  c: copy curl"))
 	blank()
 
 	return lines

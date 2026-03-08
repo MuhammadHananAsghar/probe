@@ -9,6 +9,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// asciiLogo is the probe ASCII art banner, rendered with block characters.
+const asciiLogo = "" +
+	`  █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀` + "\n" +
+	`  █▀▀▀ █▀▀▄ █  █ █▀▀▄ █▀▀ ` + "\n" +
+	`  ▀    ▀  ▀ ▀▀▀▀ ▀▀▀  ▀▀▀▀`
+
+const logoTagline = "  Universal LLM API Debugger  ·  github.com/MuhammadHananAsghar/probe"
+
+// bannerHeight is the number of terminal lines the banner occupies
+// (3 logo lines + 1 tagline + 2 blank lines).
+const bannerHeight = 6
+
 var (
 	// Colors
 	colorGreen  = lipgloss.Color("#00D26A")
@@ -41,7 +53,32 @@ var (
 	modelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#A78BFA"))
 	borderStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorDim).Padding(0, 1)
 	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(colorBlue).Padding(0, 1)
+	hintsStyle    = lipgloss.NewStyle().Foreground(colorDim)
+	logoStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A78BFA"))
+	taglineStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#4A5568"))
 )
+
+// renderBanner returns the full ASCII logo + tagline block with surrounding spacing.
+func renderBanner() string {
+	return logoStyle.Render(asciiLogo) + "\n" +
+		taglineStyle.Render(logoTagline) + "\n\n"
+}
+
+// renderHints returns a one-line key hint bar for the given view mode.
+func renderHints(mode ViewMode) string {
+	var hints string
+	switch mode {
+	case ViewList:
+		hints = "  ↑↓ / jk  navigate    enter  inspect request    q / ctrl+c  quit"
+	case ViewDetail:
+		hints = "  ↑↓ / jk  scroll    s  stream    t  tools    c  copy curl    esc / q  back"
+	case ViewStream:
+		hints = "  ↑↓ / jk  scroll    esc / q  back to detail"
+	case ViewTools:
+		hints = "  ↑↓ / jk  scroll    esc / q  back to detail"
+	}
+	return hintsStyle.Render(hints)
+}
 
 // StatusColor returns the appropriate lipgloss color for an HTTP status code.
 func StatusColor(code int) lipgloss.Color {
@@ -77,13 +114,13 @@ func FormatCost(cost float64, known bool) string {
 	if cost == 0 {
 		return costStyle.Render("$0.00")
 	}
-	if cost < 0.0001 {
-		return costStyle.Render("<$0.0001")
+	if cost < 0.00000001 {
+		return costStyle.Render("<$0.00000001")
 	}
 	if cost < 0.01 {
-		return costStyle.Render(fmt.Sprintf("$%.4f", cost))
+		return costStyle.Render(fmt.Sprintf("$%.8f", cost))
 	}
-	return costStyle.Render(fmt.Sprintf("$%.4f", cost))
+	return costStyle.Render(fmt.Sprintf("$%.8f", cost))
 }
 
 // FormatDuration formats a time.Duration for concise display.

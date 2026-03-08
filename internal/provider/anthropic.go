@@ -88,6 +88,50 @@ func (a *Anthropic) ParseRequest(body []byte, req *store.Request) error {
 		return true
 	})
 
+	req.ManyTools = len(req.Tools) > 20
+
+	// Parse tool results from user messages: look for content blocks of type "tool_result".
+	gjson.GetBytes(body, "messages").ForEach(func(_, v gjson.Result) bool {
+		if v.Get("role").String() != "user" {
+			return true
+		}
+		content := v.Get("content")
+		if content.Type != gjson.JSON {
+			return true
+		}
+		content.ForEach(func(_, block gjson.Result) bool {
+			if block.Get("type").String() != "tool_result" {
+				return true
+			}
+			toolUseID := block.Get("tool_use_id").String()
+			if toolUseID == "" {
+				return true
+			}
+			// Content can be a string or an array of content blocks.
+			contentVal := block.Get("content")
+			var contentStr string
+			if contentVal.Type == gjson.String {
+				contentStr = contentVal.String()
+			} else if contentVal.Type == gjson.JSON {
+				// Concatenate text blocks.
+				contentVal.ForEach(func(_, cb gjson.Result) bool {
+					if cb.Get("type").String() == "text" {
+						contentStr += cb.Get("text").String()
+					}
+					return true
+				})
+			}
+			isError := block.Get("is_error").Bool()
+			req.ToolResults = append(req.ToolResults, store.ToolResult{
+				ToolCallID: toolUseID,
+				Content:    contentStr,
+				IsError:    isError,
+			})
+			return true
+		})
+		return true
+	})
+
 	return nil
 }
 
@@ -157,12 +201,34 @@ func (a *Anthropic) ParseEvent(eventType, data string, req *store.Request) strin
 		if it.Exists() {
 			req.InputTokens = int(it.Int())
 		}
+	case "content_block_start":
+		// Initialize a new ToolCall when a tool_use content block starts.
+		blockType := gjson.GetBytes(b, "content_block.type").String()
+		if blockType == "tool_use" {
+			blockIdx := int(gjson.GetBytes(b, "index").Int())
+			tc := store.ToolCall{
+				ID:   gjson.GetBytes(b, "content_block.id").String(),
+				Name: gjson.GetBytes(b, "content_block.name").String(),
+			}
+			req.ToolCalls = append(req.ToolCalls, tc)
+			if req.StreamToolIdx == nil {
+				req.StreamToolIdx = make(map[int]int)
+			}
+			req.StreamToolIdx[blockIdx] = len(req.ToolCalls) - 1
+		}
 	case "content_block_delta":
 		deltaType := gjson.GetBytes(b, "delta.type").String()
 		if deltaType == "text_delta" {
 			return gjson.GetBytes(b, "delta.text").String()
 		}
-		// tool_use input_json_delta — Phase 3
+		if deltaType == "input_json_delta" {
+			blockIdx := int(gjson.GetBytes(b, "index").Int())
+			if req.StreamToolIdx != nil {
+				if tcIdx, ok := req.StreamToolIdx[blockIdx]; ok && tcIdx < len(req.ToolCalls) {
+					req.ToolCalls[tcIdx].ArgumentsJSON += gjson.GetBytes(b, "delta.partial_json").String()
+				}
+			}
+		}
 	case "message_delta":
 		ot := gjson.GetBytes(b, "usage.output_tokens")
 		if ot.Exists() {

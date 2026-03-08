@@ -39,12 +39,24 @@ func (o *OpenAI) ParseRequest(body []byte, req *store.Request) error {
 
 	// Messages.
 	gjson.GetBytes(body, "messages").ForEach(func(_, v gjson.Result) bool {
+		role := v.Get("role").String()
 		msg := store.Message{
-			Role:    v.Get("role").String(),
+			Role:    role,
 			Content: v.Get("content").String(),
 		}
-		if msg.Role == "system" && req.SystemPrompt == "" {
+		if role == "system" && req.SystemPrompt == "" {
 			req.SystemPrompt = msg.Content
+		}
+		// Parse tool results from messages with role "tool".
+		if role == "tool" {
+			toolCallID := v.Get("tool_call_id").String()
+			content := v.Get("content").String()
+			if toolCallID != "" {
+				req.ToolResults = append(req.ToolResults, store.ToolResult{
+					ToolCallID: toolCallID,
+					Content:    content,
+				})
+			}
 		}
 		req.Messages = append(req.Messages, msg)
 		return true
@@ -74,6 +86,8 @@ func (o *OpenAI) ParseRequest(body []byte, req *store.Request) error {
 			return true
 		})
 	}
+
+	req.ManyTools = len(req.Tools) > 20
 
 	return nil
 }
@@ -148,16 +162,27 @@ func (o *OpenAI) ParseEvent(eventType, data string, req *store.Request) string {
 		req.FinishReason = mapOpenAIFinishReason(fr.String())
 	}
 
-	// Tool call delta (Phase 3 will handle fully; just accumulate name here).
-	tcName := gjson.GetBytes(b, "choices.0.delta.tool_calls.0.function.name").String()
-	if tcName != "" {
-		if len(req.ToolCalls) == 0 {
-			req.ToolCalls = append(req.ToolCalls, store.ToolCall{
-				ID:   gjson.GetBytes(b, "choices.0.delta.tool_calls.0.id").String(),
-				Name: tcName,
-			})
+	// Tool call deltas: accumulate all tool calls across SSE chunks.
+	// OpenAI sends choices[0].delta.tool_calls as an array with an index field.
+	gjson.GetBytes(b, "choices.0.delta.tool_calls").ForEach(func(_, tc gjson.Result) bool {
+		idx := int(tc.Get("index").Int())
+		// Grow the slice if needed.
+		for len(req.ToolCalls) <= idx {
+			req.ToolCalls = append(req.ToolCalls, store.ToolCall{})
 		}
-	}
+		// First chunk carries id and function.name.
+		if id := tc.Get("id").String(); id != "" {
+			req.ToolCalls[idx].ID = id
+		}
+		if name := tc.Get("function.name").String(); name != "" {
+			req.ToolCalls[idx].Name = name
+		}
+		// Accumulate argument delta.
+		if args := tc.Get("function.arguments").String(); args != "" {
+			req.ToolCalls[idx].ArgumentsJSON += args
+		}
+		return true
+	})
 
 	// Usage in final chunk (some models include it).
 	if pt := gjson.GetBytes(b, "usage.prompt_tokens"); pt.Exists() {

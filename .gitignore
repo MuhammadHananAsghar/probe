@@ -1,0 +1,83 @@
+# ── Binaries ──────────────────────────────────────────────────────────────────
+probe
+probe.exe
+dist/
+*.exe
+*.out
+*.test
+*.bench
+
+# ── Go toolchain ──────────────────────────────────────────────────────────────
+vendor/
+*.so
+*.dylib
+
+# ── Go test & coverage ────────────────────────────────────────────────────────
+coverage.out
+coverage.html
+*.coverprofile
+cpu.prof
+mem.prof
+
+# ── React / Node ──────────────────────────────────────────────────────────────
+internal/dashboard/ui/node_modules/
+internal/dashboard/ui/dist/
+internal/dashboard/ui/.env
+internal/dashboard/ui/.env.local
+internal/dashboard/ui/.env.*.local
+
+# ── SQLite / Probe data ───────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+~/.probe/
+
+# ── Secrets & credentials ─────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+secrets.yaml
+secrets.yml
+
+# ── GoReleaser ────────────────────────────────────────────────────────────────
+dist/
+
+# ── Claude Code ───────────────────────────────────────────────────────────────
+.claude/
+CLAUDE.md
+*.jsonl
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ── VS Code ───────────────────────────────────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── JetBrains ─────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+
+# ── Vim / Emacs ───────────────────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+
+# ── Logs & temp ───────────────────────────────────────────────────────────────
+*.log
+tmp/
+temp/
+
+# ── Project planning (local only) ────────────────────────────────────────────
+phases/
+Probe_Project_Plan.md

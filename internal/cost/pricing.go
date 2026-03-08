@@ -35,8 +35,10 @@ type DB struct {
 }
 
 // NewDB loads pricing from the embedded JSON file and merges custom overrides
-// from the provided config map. Custom entries take precedence over built-in data.
-func NewDB(customPricing map[string]config.CustomPricing) (*DB, error) {
+// from the provided config map. If livePricing is non-nil (fetched from LiteLLM
+// at startup), it replaces the embedded data as the base layer. Custom config
+// entries always take the highest precedence.
+func NewDB(customPricing map[string]config.CustomPricing, livePricing map[string]ModelPricing) (*DB, error) {
 	var pf pricingFile
 	if err := json.Unmarshal(pricingDataJSON, &pf); err != nil {
 		return nil, fmt.Errorf("cost: parsing embedded pricing data: %w", err)
@@ -47,10 +49,18 @@ func NewDB(customPricing map[string]config.CustomPricing) (*DB, error) {
 		custom: make(map[string]ModelPricing, len(customPricing)),
 	}
 
+	// Start with embedded data as the base.
 	for name, p := range pf.Models {
 		db.models[strings.ToLower(name)] = p
 	}
 
+	// Overlay with live LiteLLM data if available — covers far more models
+	// and stays up to date with provider price changes.
+	for name, p := range livePricing {
+		db.models[strings.ToLower(name)] = p
+	}
+
+	// User-defined custom overrides always win.
 	for name, cp := range customPricing {
 		db.custom[strings.ToLower(name)] = ModelPricing{
 			InputPer1M:  cp.InputPer1M,

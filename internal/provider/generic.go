@@ -32,3 +32,9 @@ func (g *Generic) ParseRequest(body []byte, req *store.Request) error {
 func (g *Generic) ParseResponse(body []byte, req *store.Request) error {
 	return g.openai.ParseResponse(body, req)
 }
+
+// ParseEvent delegates to the OpenAI streaming parser, enabling Generic
+// providers to handle SSE streaming without a dedicated parser.
+func (g *Generic) ParseEvent(eventType, data string, req *store.Request) string {
+	return g.openai.ParseEvent(eventType, data, req)
+}
