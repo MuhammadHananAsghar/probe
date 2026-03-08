@@ -3,10 +3,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -56,6 +60,8 @@ func buildRoot() *cobra.Command {
 	root.AddCommand(buildExport())
 	root.AddCommand(buildAnalyze())
 	root.AddCommand(buildHistory())
+	root.AddCommand(buildUninstall())
+	root.AddCommand(buildUpdate())
 
 	return root
 }
@@ -830,4 +836,380 @@ func runHistory(costMode, errorsOnly bool, modelFilter string, cleanup bool, lim
 	}
 	fmt.Printf("\n%d requests shown\n", len(requests))
 	return nil
+}
+
+// ── uninstall command ─────────────────────────────────────────────────────────
+
+func buildUninstall() *cobra.Command {
+	var yesFlag bool
+
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Completely remove probe from this system",
+		Long: `Remove probe binary, config, data, and CA certificates from this system.
+Handles all installation methods: Homebrew, curl install, go install, or manual.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUninstall(yesFlag)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "Skip confirmation prompt")
+	return cmd
+}
+
+func runUninstall(skipConfirm bool) error {
+	fmt.Println("probe uninstall — removing probe from this system")
+	fmt.Println()
+
+	// Discover what's installed.
+	var actions []uninstallAction
+
+	// 1. Check Homebrew.
+	if brewCellar, err := exec.Command("brew", "--cellar", "probe").Output(); err == nil {
+		cellarPath := strings.TrimSpace(string(brewCellar))
+		if _, err := os.Stat(cellarPath); err == nil {
+			actions = append(actions, uninstallAction{
+				desc: "Homebrew formula (brew uninstall probe && brew untap muhammadhananasghar/tap)",
+				run: func() error {
+					if out, err := exec.Command("brew", "uninstall", "probe").CombinedOutput(); err != nil {
+						return fmt.Errorf("brew uninstall: %s", strings.TrimSpace(string(out)))
+					}
+					// Untap silently — may fail if other formulas use the tap.
+					_ = exec.Command("brew", "untap", "muhammadhananasghar/tap").Run()
+					return nil
+				},
+			})
+		}
+	}
+
+	// 2. Check common binary locations.
+	self, _ := os.Executable()
+	binaryPaths := []string{
+		"/usr/local/bin/probe",
+		"/opt/homebrew/bin/probe",
+	}
+	// Add $GOPATH/bin and $HOME/go/bin.
+	if gopath := os.Getenv("GOPATH"); gopath != "" {
+		binaryPaths = append(binaryPaths, gopath+"/bin/probe")
+	}
+	if home, _ := os.UserHomeDir(); home != "" {
+		binaryPaths = append(binaryPaths, home+"/go/bin/probe")
+	}
+
+	seen := make(map[string]bool)
+	for _, p := range binaryPaths {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		if _, err := os.Stat(p); err == nil {
+			path := p // capture for closure
+			actions = append(actions, uninstallAction{
+				desc: fmt.Sprintf("Binary at %s", path),
+				run: func() error {
+					if err := os.Remove(path); err != nil {
+						// Try sudo.
+						if out, serr := exec.Command("sudo", "rm", "-f", path).CombinedOutput(); serr != nil {
+							return fmt.Errorf("remove %s: %s", path, strings.TrimSpace(string(out)))
+						}
+					}
+					return nil
+				},
+			})
+		}
+	}
+
+	// 3. Running binary (if different from above paths).
+	if self != "" && !seen[self] {
+		if _, err := os.Stat(self); err == nil {
+			selfPath := self
+			actions = append(actions, uninstallAction{
+				desc: fmt.Sprintf("Current binary at %s", selfPath),
+				run: func() error {
+					if err := os.Remove(selfPath); err != nil {
+						_ = exec.Command("sudo", "rm", "-f", selfPath).Run()
+					}
+					return nil
+				},
+			})
+		}
+	}
+
+	// 4. Config and data directory (~/.probe).
+	if home, _ := os.UserHomeDir(); home != "" {
+		probeDir := home + "/.probe"
+		if _, err := os.Stat(probeDir); err == nil {
+			actions = append(actions, uninstallAction{
+				desc: fmt.Sprintf("Config & data directory %s (config, CA certs, history.db)", probeDir),
+				run: func() error {
+					return os.RemoveAll(probeDir)
+				},
+			})
+		}
+	}
+
+	if len(actions) == 0 {
+		fmt.Println("  Nothing to remove — probe does not appear to be installed.")
+		return nil
+	}
+
+	// Show what will be removed.
+	fmt.Println("  The following will be removed:")
+	fmt.Println()
+	for i, a := range actions {
+		fmt.Printf("  %d. %s\n", i+1, a.desc)
+	}
+	fmt.Println()
+
+	if !skipConfirm {
+		fmt.Print("  Proceed? [y/N] ")
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "y" && answer != "yes" {
+			fmt.Println("  Aborted.")
+			return nil
+		}
+		fmt.Println()
+	}
+
+	// Execute removals.
+	var errs []string
+	for _, a := range actions {
+		fmt.Printf("  Removing: %s ...", a.desc)
+		if err := a.run(); err != nil {
+			fmt.Printf(" FAILED: %v\n", err)
+			errs = append(errs, err.Error())
+		} else {
+			fmt.Println(" done")
+		}
+	}
+
+	fmt.Println()
+	if len(errs) > 0 {
+		fmt.Printf("  Completed with %d error(s). You may need to remove some items manually.\n", len(errs))
+	} else {
+		fmt.Println("  probe has been completely removed from your system.")
+	}
+	return nil
+}
+
+type uninstallAction struct {
+	desc string
+	run  func() error
+}
+
+// ── update command ────────────────────────────────────────────────────────────
+
+func buildUpdate() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Update probe to the latest version",
+		Long: `Check for the latest version and update the probe binary in place.
+Detects the install method (Homebrew, curl, go install) and uses the appropriate update path.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpdate()
+		},
+	}
+}
+
+func runUpdate() error {
+	fmt.Printf("probe %s — checking for updates...\n\n", version)
+
+	// Fetch latest release from GitHub API.
+	latest, downloadURL, err := fetchLatestRelease()
+	if err != nil {
+		return fmt.Errorf("checking latest release: %w", err)
+	}
+
+	if latest == version {
+		fmt.Printf("  Already up to date (v%s).\n", version)
+		return nil
+	}
+
+	fmt.Printf("  New version available: %s → %s\n\n", version, latest)
+
+	// Detect install method and update accordingly.
+
+	// 1. Homebrew?
+	if brewOut, berr := exec.Command("brew", "list", "--formula").Output(); berr == nil {
+		if strings.Contains(string(brewOut), "probe") {
+			fmt.Println("  Updating via Homebrew...")
+			cmd := exec.Command("brew", "upgrade", "MuhammadHananAsghar/tap/probe")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("brew upgrade failed: %w", err)
+			}
+			fmt.Printf("\n  Updated to %s via Homebrew.\n", latest)
+			return nil
+		}
+	}
+
+	// 2. go install?
+	if gopath := os.Getenv("GOPATH"); gopath != "" {
+		gobin := filepath.Join(gopath, "bin", "probe")
+		if self, _ := os.Executable(); self == gobin {
+			fmt.Println("  Updating via go install...")
+			cmd := exec.Command("go", "install", "github.com/MuhammadHananAsghar/probe/cmd/probe@latest")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("go install failed: %w", err)
+			}
+			fmt.Printf("\n  Updated to %s via go install.\n", latest)
+			return nil
+		}
+	}
+	if home, _ := os.UserHomeDir(); home != "" {
+		gobin := filepath.Join(home, "go", "bin", "probe")
+		if self, _ := os.Executable(); self == gobin {
+			fmt.Println("  Updating via go install...")
+			cmd := exec.Command("go", "install", "github.com/MuhammadHananAsghar/probe/cmd/probe@latest")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("go install failed: %w", err)
+			}
+			fmt.Printf("\n  Updated to %s via go install.\n", latest)
+			return nil
+		}
+	}
+
+	// 3. Direct binary replacement (curl install or manual).
+	if downloadURL == "" {
+		return fmt.Errorf("no compatible binary found for %s/%s in the latest release", runtime.GOOS, runtime.GOARCH)
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot determine current binary path: %w", err)
+	}
+
+	fmt.Printf("  Downloading %s...\n", downloadURL)
+
+	tmpDir, err := os.MkdirTemp("", "probe-update-*")
+	if err != nil {
+		return fmt.Errorf("creating temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	archivePath := filepath.Join(tmpDir, "probe.tar.gz")
+	if err := downloadFile(downloadURL, archivePath); err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+
+	// Extract.
+	extractCmd := exec.Command("tar", "-xzf", archivePath, "-C", tmpDir)
+	if out, err := extractCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("extraction failed: %s", strings.TrimSpace(string(out)))
+	}
+
+	newBinary := filepath.Join(tmpDir, "probe")
+	if _, err := os.Stat(newBinary); err != nil {
+		return fmt.Errorf("extracted binary not found")
+	}
+
+	// Replace the current binary.
+	fmt.Printf("  Replacing %s...\n", self)
+	if err := replaceBinary(self, newBinary); err != nil {
+		return fmt.Errorf("replacing binary: %w", err)
+	}
+
+	fmt.Printf("\n  Updated to %s.\n", latest)
+	return nil
+}
+
+// fetchLatestRelease queries the GitHub API for the latest probe release.
+// Returns version tag, download URL for the current OS/arch, and any error.
+func fetchLatestRelease() (string, string, error) {
+	apiURL := "https://api.github.com/repos/MuhammadHananAsghar/probe/releases/latest"
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", "", err
+	}
+
+	ver := strings.TrimPrefix(release.TagName, "v")
+
+	// Find the right archive for this OS/arch.
+	archiveName := fmt.Sprintf("probe_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	var downloadURL string
+	for _, a := range release.Assets {
+		if a.Name == archiveName {
+			downloadURL = a.BrowserDownloadURL
+			break
+		}
+	}
+
+	return ver, downloadURL, nil
+}
+
+// downloadFile downloads a URL to a local file path.
+func downloadFile(url, dest string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+// replaceBinary replaces oldPath with newPath. Uses sudo if needed.
+func replaceBinary(oldPath, newPath string) error {
+	if err := os.Chmod(newPath, 0o755); err != nil {
+		return err
+	}
+
+	// Try direct rename first.
+	if err := os.Rename(newPath, oldPath); err == nil {
+		return nil
+	}
+
+	// Rename across filesystems — copy then remove.
+	src, err := os.Open(newPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(oldPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		// Need sudo.
+		cmd := exec.Command("sudo", "cp", newPath, oldPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
 }

@@ -398,6 +398,13 @@ probe analyze --duplicates            # find identical requests
 
 # Version
 probe version
+
+# Update to latest version (auto-detects install method)
+probe update
+
+# Uninstall (removes binary, config, CA certs, history — all install methods)
+probe uninstall
+probe uninstall --yes         # skip confirmation
 ```
 
 ## TUI Keybindings
