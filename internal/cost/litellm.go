@@ -19,11 +19,13 @@ const (
 
 // liteLLMEntry mirrors a single model entry in LiteLLM's pricing JSON.
 // LiteLLM stores costs per token; we convert to per-1M for internal use.
+// Fields use json.Number to handle LiteLLM's inconsistent types (some entries
+// like "sample_spec" use strings for normally-numeric fields).
 type liteLLMEntry struct {
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
 	OutputCostPerToken float64 `json:"output_cost_per_token"`
-	MaxInputTokens     int     `json:"max_input_tokens"`
-	MaxOutputTokens    int     `json:"max_output_tokens"`
+	MaxInputTokens     any     `json:"max_input_tokens"`
+	MaxOutputTokens    any     `json:"max_output_tokens"`
 	Provider           string  `json:"litellm_provider"`
 	Mode               string  `json:"mode"`
 }
@@ -84,14 +86,19 @@ func fetchRaw(ctx context.Context) ([]byte, error) {
 
 // parseLiteLLM converts raw LiteLLM JSON into our internal ModelPricing map.
 // Models with zero input/output cost are skipped (e.g. free tier or incomplete entries).
+// Individual entries that fail to parse are silently skipped.
 func parseLiteLLM(data []byte) (map[string]ModelPricing, error) {
-	var raw map[string]liteLLMEntry
+	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := make(map[string]ModelPricing, len(raw))
-	for name, e := range raw {
+	for name, rawEntry := range raw {
+		var e liteLLMEntry
+		if err := json.Unmarshal(rawEntry, &e); err != nil {
+			continue // skip entries with incompatible types (e.g. "sample_spec")
+		}
 		if e.InputCostPerToken == 0 && e.OutputCostPerToken == 0 {
 			continue
 		}
@@ -99,14 +106,28 @@ func parseLiteLLM(data []byte) (map[string]ModelPricing, error) {
 		if e.Mode != "" && e.Mode != "chat" && e.Mode != "completion" && e.Mode != "text-completion-openai" {
 			continue
 		}
+		ctxWindow := toInt(e.MaxInputTokens)
 		out[strings.ToLower(name)] = ModelPricing{
 			Provider:      e.Provider,
 			InputPer1M:    e.InputCostPerToken * 1_000_000,
 			OutputPer1M:   e.OutputCostPerToken * 1_000_000,
-			ContextWindow: e.MaxInputTokens,
+			ContextWindow: ctxWindow,
 		}
 	}
 	return out, nil
+}
+
+// toInt converts an any value (float64, json.Number, string) to int.
+func toInt(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	default:
+		return 0
+	}
 }
 
 // cacheDir returns the ~/.probe directory, creating it if needed.
