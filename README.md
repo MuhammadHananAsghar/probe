@@ -19,17 +19,17 @@
 
 ---
 
-**Probe** is an open-source LLM API debugger that sits between your application and any AI provider. Point your SDK at `http://localhost:8080` and get a full live view of every request, response, token count, cost, and latency — with zero code changes.
+**Probe** is an open-source LLM API debugger that sits between your application and any AI provider. Point your SDK at `http://localhost:9000` and get a full live view of every request, response, token count, cost, and latency — with zero code changes.
 
 ```bash
-OPENAI_BASE_URL=http://localhost:8080 python your_app.py
+OPENAI_BASE_URL=http://localhost:9000 python your_app.py
 ```
 
 ```
   █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀
   █  █ █▄▄▀ █  █ █▀▀▄ █▀▀
   █▀▀▀ ▀ ▀▀ ▀▀▀▀ ▀▀▀  ▀▀▀
-  probe v0.1.0  ·  listening on :8080  ·  dashboard http://localhost:9090
+  probe v0.1.0  ·  listening on :9000  ·  dashboard http://localhost:9001
 
   #   Provider    Model                   Tokens     Cost      Latency  Status
   ──────────────────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ OPENAI_BASE_URL=http://localhost:8080 python your_app.py
 - **Streaming debugger** — chunk timeline, TTFT (time-to-first-token), full SSE inspection
 - **Tool call inspector** — visualise every function call and its arguments/results
 - **Token & cost tracking** — per-request and session totals with real pricing data
-- **Web dashboard** — live React SPA at `localhost:9090` with WebSocket updates
+- **Web dashboard** — live React SPA at `localhost:9001` with WebSocket updates
 - **Request replay** — re-send any captured request, optionally with a different model or provider
 - **Cross-provider compare** — run the same prompt against two models side-by-side
 - **Anomaly alerts** — configurable cost/latency/error banners in the TUI
@@ -98,22 +98,22 @@ Pre-built binaries for macOS, Linux, and Windows are available on the [releases 
 
 ```bash
 probe listen
-# Proxy:     http://localhost:8080
-# Dashboard: http://localhost:9090
+# Proxy:     http://localhost:9000
+# Dashboard: http://localhost:9001
 ```
 
 ### 2. Point your SDK at probe
 
 ```bash
 # OpenAI (Python)
-export OPENAI_BASE_URL=http://localhost:8080
+export OPENAI_BASE_URL=http://localhost:9000
 
 # Anthropic (Python)
-export ANTHROPIC_BASE_URL=http://localhost:8080
+export ANTHROPIC_BASE_URL=http://localhost:9000
 
 # Any OpenAI-compatible SDK
 export OPENAI_API_KEY=your-real-key
-export OPENAI_BASE_URL=http://localhost:8080
+export OPENAI_BASE_URL=http://localhost:9000
 
 python your_app.py
 ```
@@ -193,7 +193,7 @@ probe version
 
 ## Web Dashboard
 
-Open `http://localhost:9090` in your browser for the live dashboard:
+Open `http://localhost:9001` in your browser for the live dashboard:
 
 - Real-time request stream via WebSocket
 - Full request/response detail with syntax highlighting
@@ -225,8 +225,8 @@ Probe reads `~/.probe/config.yaml` on startup. All values can be overridden with
 
 ```yaml
 proxy:
-  port: 8080
-  dashboard_port: 9090
+  port: 9000
+  dashboard_port: 9001
 
 storage:
   persist: false          # enable SQLite persistence
@@ -255,7 +255,7 @@ YOUR APP                        PROBE                        LLM PROVIDER
                                └──────────────────────┘
 ```
 
-1. Your app sends an API request to `http://localhost:8080` instead of the real provider
+1. Your app sends an API request to `http://localhost:9000` instead of the real provider
 2. Probe forwards it upstream over HTTPS with your real API key untouched
 3. The response (including SSE streams) is intercepted, parsed, and stored
 4. The TUI and web dashboard update live via the in-memory ring buffer
