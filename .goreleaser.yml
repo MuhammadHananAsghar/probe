@@ -46,6 +46,7 @@ brews:
   - repository:
       owner: MuhammadHananAsghar
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/MuhammadHananAsghar/probe"
     description: "Universal LLM API Debugger — intercept, inspect, and replay every AI call your app makes."
     license: "MIT"
